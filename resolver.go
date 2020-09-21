@@ -80,39 +80,45 @@ func DnsConfFromSSH(sshBox *SSHBox) (*DnsConfig, error) {
 	return dnsConf, nil
 }
 
+func NameResolverFactoryTunnels(dnsservers []string) func(sshBox *SSHBox) (NameResolver, error) {
+	return func(sshBox *SSHBox) (NameResolver, error) {
+		tunnels, err := DNSServerToTunnel(dnsservers)
+		if err != nil {
+			return nil, err
+		}
+		if len(tunnels) == 0 {
+			return nil, nil
+		}
+
+		servers := make([]string, len(tunnels))
+		for i, tunnel := range tunnels {
+			startListen := make(chan bool, 1)
+			errTunnel := make(chan error, 1)
+			go func() {
+				err := sshBox.listenLocal(nil, tunnel, startListen)
+				if err != nil {
+					errTunnel <- err
+				}
+			}()
+			servers[i] = fmt.Sprintf("127.0.0.1:%d", tunnel.LocalPort)
+			select {
+			case err := <-errTunnel:
+				return nil, err
+			case <-startListen:
+				continue
+			}
+		}
+
+		return NewNameResolverSimple(servers), nil
+	}
+}
+
 func NameResolverFactorySSH(sshBox *SSHBox) (NameResolver, error) {
 	dnsConf, err := DnsConfFromSSH(sshBox)
 	if err != nil {
 		return nil, err
 	}
-	tunnels, err := DNSServerToTunnel(dnsConf.Servers)
-	if err != nil {
-		return nil, err
-	}
-	if len(tunnels) == 0 {
-		return nil, nil
-	}
-
-	servers := make([]string, len(tunnels))
-	for i, tunnel := range tunnels {
-		startListen := make(chan bool, 1)
-		errTunnel := make(chan error, 1)
-		go func() {
-			err := sshBox.listenLocal(nil, tunnel, startListen)
-			if err != nil {
-				errTunnel <- err
-			}
-		}()
-		servers[i] = fmt.Sprintf("127.0.0.1:%d", tunnel.LocalPort)
-		select {
-		case err := <-errTunnel:
-			return nil, err
-		case <-startListen:
-			continue
-		}
-	}
-
-	return NewNameResolverSimple(servers), nil
+	return NameResolverFactoryTunnels(dnsConf.Servers)(sshBox)
 }
 
 func DNSServerToTunnel(dnsservers []string) ([]*TunnelTarget, error) {
