@@ -82,7 +82,7 @@ func (t *SSHBox) listenLocal(wg *sync.WaitGroup, target *TunnelTarget, startList
 			return errLoadErrorf("error on accept: %s", err.Error())
 		}
 
-		go handleTunnelClient(conn, t.sshClient, target)
+		go HandleTunnelClient(conn, t.sshClient, target)
 	}
 	return nil
 }
@@ -116,7 +116,7 @@ func (t *SSHBox) listenRLocal(wg *sync.WaitGroup, target *TunnelTarget, startLis
 			return errLoadErrorf("error on accept: %s", err.Error())
 		}
 
-		go handleRTunnelClient(conn, target)
+		go HandleRTunnelClient(conn, target)
 
 	}
 
@@ -235,7 +235,7 @@ func (t *SSHBox) StopSSH() {
 	t.emitter.EmitStopSsh()
 }
 
-func handleTunnelClient(client net.Conn, sshClient *ssh.Client, target *TunnelTarget) {
+func HandleTunnelClient(client net.Conn, sshClient *ssh.Client, target *TunnelTarget) {
 	defer client.Close()
 	targetAddr := fmt.Sprintf("%s:%d", target.RemoteHost, target.RemotePort)
 	remoteConn, err := sshClient.Dial(target.Network, targetAddr)
@@ -248,7 +248,7 @@ func handleTunnelClient(client net.Conn, sshClient *ssh.Client, target *TunnelTa
 	copyData(client, remoteConn)
 }
 
-func handleRTunnelClient(client net.Conn, target *TunnelTarget) {
+func HandleRTunnelClient(client net.Conn, target *TunnelTarget) {
 	defer client.Close()
 	localAddr := fmt.Sprintf("127.0.0.1:%d", target.LocalPort)
 	local, err := net.Dial(target.Network, localAddr)
