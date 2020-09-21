@@ -53,6 +53,10 @@ func NewSSHBox(config SSHConf, opts ...SSHBoxOptions) (*SSHBox, error) {
 	return t, err
 }
 
+func (t *SSHBox) SetNameResolverFactory(nrf NameResolverFactory) {
+	t.nameResolverFactory = nrf
+}
+
 func (t *SSHBox) listenLocal(wg *sync.WaitGroup, target *TunnelTarget, startListen chan bool) error {
 	if wg != nil {
 		defer wg.Done()
