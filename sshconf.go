@@ -8,7 +8,7 @@ import (
 )
 
 type SSHConf struct {
-	SSHUri             string
+	Host               string
 	User               string
 	Password           string
 	PrivateKey         string
@@ -19,8 +19,8 @@ type SSHConf struct {
 }
 
 func (c *SSHConf) CheckAndFill() error {
-	if c.SSHUri == "" {
-		return fmt.Errorf("You must set an ssh uri")
+	if c.Host == "" {
+		return fmt.Errorf("You must set an host")
 	}
 	user, _ := osuser.Current()
 	if c.User == "" {
@@ -33,9 +33,9 @@ func (c *SSHConf) CheckAndFill() error {
 		c.User = "root"
 	}
 
-	_, _, err := net.SplitHostPort(c.SSHUri)
+	_, _, err := net.SplitHostPort(c.Host)
 	if err != nil {
-		c.SSHUri += ":22"
+		c.Host += ":22"
 	}
 	if c.NoSSHAgent {
 		emptyString := ""
@@ -46,4 +46,12 @@ func (c *SSHConf) CheckAndFill() error {
 		c.SSHAuthSock = &sock
 	}
 	return nil
+}
+
+func (c *SSHConf) String() string {
+	user := ""
+	if c.User != "" {
+		user = c.User + "@"
+	}
+	return fmt.Sprintf("ssh://%s%s", user, c.Host)
 }

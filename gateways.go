@@ -2,6 +2,7 @@ package sshbox
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"strconv"
 
@@ -17,6 +18,7 @@ type GatewayInfo struct {
 
 type Gateways struct {
 	gateways []*SSHConf
+	logger   *log.Logger
 }
 
 func NewGateways(gateways []*SSHConf) *Gateways {
@@ -36,7 +38,7 @@ func (g Gateways) RunGateways(sshUri string) (string, error) {
 		}
 		gi.LocalPort = port
 		if i == 0 {
-			gi.SrcSSHUri = gateway.SSHUri
+			gi.SrcSSHUri = gateway.Host
 		} else {
 			gi.SrcSSHUri = fmt.Sprintf("127.0.0.1:%d", sshUris[i-1].LocalPort)
 		}
@@ -44,7 +46,7 @@ func (g Gateways) RunGateways(sshUri string) (string, error) {
 			sshUris[i] = gi
 			continue
 		}
-		remoteHost, remotePortRaw, err := net.SplitHostPort(g.gateways[i+1].SSHUri)
+		remoteHost, remotePortRaw, err := net.SplitHostPort(g.gateways[i+1].Host)
 		if err != nil {
 			return "", err
 		}
@@ -55,7 +57,7 @@ func (g Gateways) RunGateways(sshUri string) (string, error) {
 
 	for i, gateway := range g.gateways {
 		sb, err := NewSSHBox(SSHConf{
-			SSHUri:             sshUris[i].SrcSSHUri,
+			Host:               sshUris[i].SrcSSHUri,
 			User:               gateway.User,
 			Password:           gateway.Password,
 			PrivateKey:         gateway.PrivateKey,
@@ -93,7 +95,7 @@ func (g Gateways) RunGateways(sshUri string) (string, error) {
 		go func() {
 			err := sb.StartTunnels([]*TunnelTarget{target})
 			if err != nil {
-				// TODO: erroring
+				logger.Errorf("Could not start tunnel for gateways: %s", err.Error())
 			}
 		}()
 		<-sub

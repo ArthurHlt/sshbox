@@ -51,9 +51,9 @@ func DefaultSshClientFactory(conf SSHConf) (*ssh.Client, error) {
 		authMethods = append(authMethods, ssh.PublicKeys(pubKeys.Signer))
 	}
 
-	host, port, err := net.SplitHostPort(conf.SSHUri)
+	host, port, err := net.SplitHostPort(conf.Host)
 	if err != nil {
-		host = conf.SSHUri
+		host = conf.Host
 		port = "22"
 	}
 

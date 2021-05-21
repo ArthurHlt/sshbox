@@ -1,6 +1,7 @@
 package sshbox
 
 import (
+	"fmt"
 	"github.com/ArthurHlt/sshbox/freeports"
 )
 
@@ -34,4 +35,11 @@ func (c *TunnelTarget) CheckAndFill() error {
 		}
 	}
 	return nil
+}
+
+func (c *TunnelTarget) String() string {
+	if !c.Reverse {
+		return fmt.Sprintf("%s://localhost:%d -> %s://%s:%d", c.Network, c.LocalPort, c.Network, c.RemoteHost, c.RemotePort)
+	}
+	return fmt.Sprintf("%s://%s:%d -> %s://localhost:%d", c.Network, c.RemoteHost, c.RemotePort, c.Network, c.LocalPort)
 }

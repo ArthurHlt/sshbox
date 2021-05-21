@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ArthurHlt/go-socks5"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -70,7 +69,7 @@ func (t *SSHBox) listenLocal(wg *sync.WaitGroup, target *TunnelTarget, startList
 	go func() {
 		select {
 		case <-t.emitter.OnStopTunnels():
-			log.Debug("Stopping tunnels cause of emitted stop tunnels message")
+			logger.Debug("Stopping tunnels cause of emitted stop tunnels message")
 			listener.Close()
 			return
 		}
@@ -98,13 +97,13 @@ func (t *SSHBox) listenRLocal(wg *sync.WaitGroup, target *TunnelTarget, startLis
 	targetAddr := fmt.Sprintf("%s:%d", target.RemoteHost, target.RemotePort)
 	listener, err := t.sshClient.Listen(target.Network, targetAddr)
 	if err != nil {
-		log.Fatalln(fmt.Printf("Listen open port ON remote server error: %s", err))
+		logger.Fatalln(fmt.Printf("Listen open port ON remote server error: %s", err))
 	}
 	defer listener.Close()
 	go func() {
 		select {
 		case <-t.emitter.OnStopTunnels():
-			log.Debug("Stopping reverse tunnels cause of emitted stop tunnels message")
+			logger.Debug("Stopping reverse tunnels cause of emitted stop tunnels message")
 			listener.Close()
 			return
 		}
@@ -128,6 +127,8 @@ func (t *SSHBox) listenRLocal(wg *sync.WaitGroup, target *TunnelTarget, startLis
 
 func (t *SSHBox) makeSSHClient(keepaliveStopCh chan struct{}) (*ssh.Client, error) {
 
+	entry := logger.WithField("target", t.config)
+	entry.Debug("Starting ssh client ...")
 	serverConn, err := t.sshFactory(t.config)
 	if err != nil {
 		return nil, err
@@ -136,7 +137,7 @@ func (t *SSHBox) makeSSHClient(keepaliveStopCh chan struct{}) (*ssh.Client, erro
 	go func() {
 		select {
 		case <-t.emitter.OnStopSsh():
-			log.Debug("Stopping ssh client cause of emitted stop ssh message")
+			logger.Debug("Stopping ssh client cause of emitted stop ssh message")
 			t.emitter.EmitStopSocks()
 			t.emitter.EmitStopTunnels()
 			serverConn.Close()
@@ -156,20 +157,21 @@ func (t *SSHBox) StartTunnels(tunnelTargets []*TunnelTarget) error {
 	for _, target := range tunnelTargets {
 		startListen := make(chan bool, 1)
 		errTunnel := make(chan error, 1)
+		logger.WithField("tunnel", target).Debug("Starting tunnel ...")
 		if !target.Reverse {
-			go func() {
+			go func(target *TunnelTarget, startListen chan bool, wg *sync.WaitGroup) {
 				err := t.listenLocal(wg, target, startListen)
 				if err != nil {
 					errTunnel <- err
 				}
-			}()
+			}(target, startListen, wg)
 		} else {
-			go func() {
+			go func(target *TunnelTarget, startListen chan bool, wg *sync.WaitGroup) {
 				err := t.listenRLocal(wg, target, startListen)
 				if err != nil {
 					errTunnel <- err
 				}
-			}()
+			}(target, startListen, wg)
 		}
 		select {
 		case err := <-errTunnel:
@@ -211,7 +213,8 @@ func (t *SSHBox) StartSocksServer(port int, network string) error {
 	if err != nil {
 		return errLoadErrorf("new socks5 server: %s", err) // not tested
 	}
-
+	entry := logger.WithField("target", t.config)
+	entry.Debugf("Starting listening socks5 server on port %d and in %s", port, network)
 	listener, err := net.Listen(network, fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return err
@@ -219,7 +222,7 @@ func (t *SSHBox) StartSocksServer(port int, network string) error {
 	go func() {
 		select {
 		case <-t.emitter.OnStopSocks():
-			log.Debug("Stopping socks cause of emitted stop socks message")
+			entry.Debug("Stopping socks cause of emitted stop socks message")
 			listener.Close()
 			return
 		}
@@ -273,7 +276,7 @@ func copyData(client, server net.Conn) {
 	go func() {
 		_, err := io.Copy(client, server)
 		if err != nil {
-			log.Debugf("error while copy remote->local: ", err)
+			logger.Debugf("error while copy remote->local: ", err)
 		}
 		wg.Done()
 	}()
@@ -282,7 +285,7 @@ func copyData(client, server net.Conn) {
 	go func() {
 		_, err := io.Copy(server, client)
 		if err != nil {
-			log.Debugf("error while copy local->remote: ", err)
+			logger.Debugf("error while copy local->remote: ", err)
 		}
 		wg.Done()
 	}()
@@ -301,7 +304,7 @@ func (t *SSHBox) keepalive(conn ssh.Conn, stopCh chan struct{}) {
 		case <-ticker.C:
 			_, _, err := conn.SendRequest("keepalive@sshbox.com", true, nil)
 			if err != nil {
-				log.Warningf("Stopping socks and tunnels because ssh interrupted: %s", err.Error())
+				logger.Warningf("Stopping socks and tunnels because ssh interrupted: %s", err.Error())
 				t.emitter.EmitStopSocks()
 				t.emitter.EmitStopTunnels()
 				return
