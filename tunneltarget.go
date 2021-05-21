@@ -37,7 +37,7 @@ func (c *TunnelTarget) CheckAndFill() error {
 	return nil
 }
 
-func (c *TunnelTarget) String() string {
+func (c TunnelTarget) String() string {
 	if !c.Reverse {
 		return fmt.Sprintf("%s://localhost:%d -> %s://%s:%d", c.Network, c.LocalPort, c.Network, c.RemoteHost, c.RemotePort)
 	}

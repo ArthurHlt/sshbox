@@ -48,7 +48,7 @@ func (c *SSHConf) CheckAndFill() error {
 	return nil
 }
 
-func (c *SSHConf) String() string {
+func (c SSHConf) String() string {
 	user := ""
 	if c.User != "" {
 		user = c.User + "@"
