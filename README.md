@@ -22,7 +22,7 @@ import (
 
 func main() {
 	sb, err := sshbox.NewSSHBox(sshbox.SSHConf{
-		SSHUri:     "url.com",
+		Host:      "url.com",
 		User:       "root",
 		Password:   "a password",
 		NoSSHAgent: true,
