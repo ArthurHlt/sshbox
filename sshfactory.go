@@ -4,9 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -117,22 +115,14 @@ type PublicKeys struct {
 	Signer ssh.Signer
 }
 
-func NewPublicKeys(pemBytes []byte, password string) (*PublicKeys, error) {
-	block, _ := pem.Decode(pemBytes)
-	if block == nil {
-		return nil, errors.New("invalid PEM data")
+func NewPublicKeys(pemBytes []byte, passphrase string) (*PublicKeys, error) {
+	var signer ssh.Signer
+	var err error
+	if passphrase != "" {
+		signer, err = ssh.ParsePrivateKeyWithPassphrase(pemBytes, []byte(passphrase))
+	} else {
+		signer, err = ssh.ParsePrivateKey(pemBytes)
 	}
-	if x509.IsEncryptedPEMBlock(block) {
-		key, err := x509.DecryptPEMBlock(block, []byte(password))
-		if err != nil {
-			return nil, err
-		}
-
-		block = &pem.Block{Type: block.Type, Bytes: key}
-		pemBytes = pem.EncodeToMemory(block)
-	}
-
-	signer, err := ssh.ParsePrivateKey(pemBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -140,11 +130,11 @@ func NewPublicKeys(pemBytes []byte, password string) (*PublicKeys, error) {
 	return &PublicKeys{Signer: signer}, nil
 }
 
-func NewPublicKeysFromFile(pemFile, password string) (*PublicKeys, error) {
+func NewPublicKeysFromFile(pemFile, passphrase string) (*PublicKeys, error) {
 	bytes, err := ioutil.ReadFile(pemFile)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewPublicKeys(bytes, password)
+	return NewPublicKeys(bytes, passphrase)
 }
