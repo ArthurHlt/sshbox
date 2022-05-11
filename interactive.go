@@ -11,10 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ArthurHlt/sshbox/sigwinch"
 	"github.com/moby/term"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/ArthurHlt/sshbox/sigwinch"
 )
 
 type TTYRequest int
@@ -35,13 +36,20 @@ func NewInteractiveSSH(sshBox *SSHBox) *InteractiveSSH {
 	return &InteractiveSSH{sshBox: sshBox}
 }
 
-func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest TTYRequest) error {
+func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
 	var err error
 	c.session, err = c.sshBox.SSHClient().NewSession()
 	if err != nil {
 		return fmt.Errorf("SSH session allocation failed: %s", err.Error())
 	}
 	defer c.session.Close()
+
+	for _, opt := range sessOpts {
+		err := opt(c.session)
+		if err != nil {
+			return fmt.Errorf("SSH session option failed: %s", err.Error())
+		}
+	}
 
 	stdin, stdout, stderr := term.StdStreams()
 
@@ -148,12 +156,12 @@ func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest T
 	return result
 }
 
-func (c *InteractiveSSH) Interactive() error {
-	return c.InteractiveSession([]string{}, RequestTTYAuto)
+func (c *InteractiveSSH) Interactive(sessOpts ...SSHSessionOptions) error {
+	return c.InteractiveSession([]string{}, RequestTTYAuto, sessOpts...)
 }
 
-func (c *InteractiveSSH) RunCmd(cmd []string) error {
-	return c.InteractiveSession(cmd, RequestTTYAuto)
+func (c *InteractiveSSH) RunCmd(cmd []string, sessOpts ...SSHSessionOptions) error {
+	return c.InteractiveSession(cmd, RequestTTYAuto, sessOpts...)
 }
 
 func (c *InteractiveSSH) Stop() error {

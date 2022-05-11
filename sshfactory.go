@@ -138,3 +138,26 @@ func NewPublicKeysFromFile(pemFile, passphrase string) (*PublicKeys, error) {
 
 	return NewPublicKeys(bytes, passphrase)
 }
+
+func MakeSessionNoTerminal(client *ssh.Client, opts ...SSHSessionOptions) (*ssh.Session, error) {
+	sess, err := client.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create session: %s", err)
+	}
+	for _, opt := range opts {
+		err = opt(sess)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set session option: %s", err)
+		}
+	}
+	// ensure terminal without color without making it interactive
+	err = sess.RequestPty("vt100", 0, 0, ssh.TerminalModes{
+		ssh.ECHO:          0,
+		ssh.TTY_OP_ISPEED: 115200,
+		ssh.TTY_OP_OSPEED: 115200,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("Failed to request pty: %s", err)
+	}
+	return sess, nil
+}
