@@ -4,11 +4,20 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
+
+var sanitizeRE = []*regexp.Regexp{
+	regexp.MustCompile(`\x1b\[\?1h\x1b=`),
+	regexp.MustCompile(`\x08.`),
+	regexp.MustCompile(`\x1b\[m`),
+}
+
+var errorOutputRE = regexp.MustCompile(`(?i)(error|bad|invalid|unknown)`)
 
 // CommanderSSH let you run commands on a remote host and getting the output back
 // It will create a session each time a command is run which mean that context is not persisted between commands
@@ -48,24 +57,33 @@ func (c *CommanderSSH) CombinedOutput(cmd string, opts ...SSHSessionOptions) ([]
 	return sess.CombinedOutput(cmd)
 }
 
-type ExpectPromptMatcher func(line []byte) bool
-
-func DefaultMatcher(line []byte) bool {
+func DefaultPromptMatcher(line []byte) bool {
 	return strings.Contains(string(line), "$ ")
 }
 
+func DefaultErrorMatcher(content []byte) bool {
+	return errorOutputRE.Match(content)
+}
+
 // CommanderSession let you run multiple commands on a remote host and getting the output back on a single session
-// which means that context is persisted between commands but output is buffered and split by a matcher which is often the prompt
+// which means that context is persisted between commands but output is buffered and split by a promptMatcher which is often the prompt
 type CommanderSession struct {
-	session *ssh.Session
-	matcher ExpectPromptMatcher
-	output  *singleWriter
-	stdin   io.Writer
+	session       *ssh.Session
+	promptMatcher func(line []byte) bool
+	errorMatcher  func(content []byte) bool
+	output        *singleWriter
+	stdin         io.Writer
 }
 
 // NewCommanderSession creates a new commander session
-// matcher can be nil and it will use the DefaultMatcher as matcher
-func NewCommanderSession(client *ssh.Client, matcher ExpectPromptMatcher, opts ...SSHSessionOptions) (*CommanderSession, error) {
+// promptMatcher can be nil and it will use the DefaultPromptMatcher as promptMatcher
+// errorMatcher can be nil and it will use the DefaultErrorMatcher as errorMatcher
+func NewCommanderSession(
+	client *ssh.Client,
+	promptMatcher func(line []byte) bool,
+	errorMatcher func(line []byte) bool,
+	opts ...SSHSessionOptions,
+) (*CommanderSession, error) {
 	sess, err := MakeSessionNoTerminal(client, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make sessions: %s", err)
@@ -97,14 +115,18 @@ func NewCommanderSession(client *ssh.Client, matcher ExpectPromptMatcher, opts .
 	if err != nil {
 		return nil, err
 	}
-	if matcher == nil {
-		matcher = DefaultMatcher
+	if promptMatcher == nil {
+		promptMatcher = DefaultPromptMatcher
+	}
+	if errorMatcher == nil {
+		errorMatcher = DefaultErrorMatcher
 	}
 	cmderSess := &CommanderSession{
-		session: sess,
-		matcher: matcher,
-		output:  output,
-		stdin:   inPipe,
+		session:       sess,
+		promptMatcher: promptMatcher,
+		errorMatcher:  errorMatcher,
+		output:        output,
+		stdin:         inPipe,
 	}
 	_, err = cmderSess.waitUntil()
 	if err != nil {
@@ -113,8 +135,8 @@ func NewCommanderSession(client *ssh.Client, matcher ExpectPromptMatcher, opts .
 	return cmderSess, nil
 }
 
-func (c *CommanderSession) SetMatcher(matcher ExpectPromptMatcher) {
-	c.matcher = matcher
+func (c *CommanderSession) SetMatcher(matcher func(line []byte) bool) {
+	c.promptMatcher = matcher
 }
 
 func (c *CommanderSession) Run(cmd string) ([]byte, error) {
@@ -123,20 +145,34 @@ func (c *CommanderSession) Run(cmd string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.waitUntil()
+	result, err := c.waitUntil()
+	if err != nil {
+		return nil, err
+	}
+	if c.errorMatcher(result) {
+		return nil, errTerminalError(result)
+	}
+	return result, nil
 }
 
 func (c *CommanderSession) waitUntil() ([]byte, error) {
 	for {
 		splitLines := bytes.Split(c.output.b.Bytes(), []byte{'\n'})
 		lastLine := splitLines[len(splitLines)-1]
-		if !c.matcher(lastLine) {
+		if !c.promptMatcher(lastLine) {
 			continue
 		}
 		lines := splitLines[:len(splitLines)-1]
-		return c.dropCR(bytes.Join(lines, []byte{'\n'})), nil
+		return c.sanitize(bytes.Join(lines, []byte{'\n'})), nil
 	}
 	return c.output.b.Bytes(), nil
+}
+
+func (c *CommanderSession) sanitize(line []byte) []byte {
+	for _, re := range sanitizeRE {
+		re.ReplaceAll(line, []byte(""))
+	}
+	return c.dropCR(line)
 }
 
 func (c *CommanderSession) dropCR(data []byte) []byte {
