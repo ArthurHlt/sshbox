@@ -150,15 +150,11 @@ func (c *InteractiveSSH) startInteractive(commands []string, subSystem string, t
 		go c.resize(resized, stdoutFd)
 	}
 	err = c.session.Wait()
-	if strings.Contains(err.Error(), "session not started") {
+	if err != nil && strings.Contains(err.Error(), "session not started") {
 		err = nil
 	}
 	wg.Wait()
 	return err
-}
-
-func (c *InteractiveSSH) InteractiveSessionSubSystem(subsystem string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
-	return c.startInteractive(nil, subsystem, terminalRequest, sessOpts...)
 }
 
 func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
@@ -170,7 +166,7 @@ func (c *InteractiveSSH) Interactive(sessOpts ...SSHSessionOptions) error {
 }
 
 func (c *InteractiveSSH) InteractiveSubSystem(subsystem string, sessOpts ...SSHSessionOptions) error {
-	return c.InteractiveSessionSubSystem(subsystem, RequestTTYAuto, sessOpts...)
+	return c.startInteractive(nil, subsystem, RequestTTYNo, sessOpts...)
 }
 
 func (c *InteractiveSSH) RunCmd(cmd []string, sessOpts ...SSHSessionOptions) error {
