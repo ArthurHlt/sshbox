@@ -149,9 +149,12 @@ func (c *InteractiveSSH) startInteractive(commands []string, subSystem string, t
 
 		go c.resize(resized, stdoutFd)
 	}
-	result := c.session.Wait()
+	err = c.session.Wait()
+	if strings.Contains(err.Error(), "session not started") {
+		err = nil
+	}
 	wg.Wait()
-	return result
+	return err
 }
 
 func (c *InteractiveSSH) InteractiveSessionSubSystem(subsystem string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
