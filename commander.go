@@ -73,18 +73,55 @@ type CommanderSession struct {
 	errorMatcher  func(content []byte) bool
 	output        *singleWriter
 	stdin         io.Writer
+	sessOpts      []SSHSessionOptions
+	subSystem     string
+}
+
+type commanderSessionOptions func(*CommanderSession) error
+
+// WithErrorMatcher option to set the prompt matcher
+func WithPromptMatcher(promptMatcher func(line []byte) bool) commanderSessionOptions {
+	return func(c *CommanderSession) error {
+		c.promptMatcher = promptMatcher
+		return nil
+	}
+}
+
+// WithErrorMatcher option to set the error matcher
+func WithErrorMatcher(errorMatcher func(content []byte) bool) commanderSessionOptions {
+	return func(c *CommanderSession) error {
+		c.errorMatcher = errorMatcher
+		return nil
+	}
+}
+
+// WithSessionOptions option to add options to the session
+func WithSessionOptions(opts ...SSHSessionOptions) commanderSessionOptions {
+	return func(c *CommanderSession) error {
+		c.sessOpts = opts
+		return nil
+	}
+}
+
+// WithSubSystem option to use subsystem instead of shell
+func WithSubSystem(subsystem string) commanderSessionOptions {
+	return func(c *CommanderSession) error {
+		c.subSystem = subsystem
+		return nil
+	}
 }
 
 // NewCommanderSession creates a new commander session
-// promptMatcher can be nil and it will use the DefaultPromptMatcher as promptMatcher
-// errorMatcher can be nil and it will use the DefaultErrorMatcher as errorMatcher
-func NewCommanderSession(
-	client *ssh.Client,
-	promptMatcher func(line []byte) bool,
-	errorMatcher func(line []byte) bool,
-	opts ...SSHSessionOptions,
-) (*CommanderSession, error) {
-	sess, err := MakeSessionNoTerminal(client, opts...)
+func NewCommanderSession(client *ssh.Client, opts ...commanderSessionOptions) (*CommanderSession, error) {
+	cmderSess := &CommanderSession{}
+	for _, opt := range opts {
+		err := opt(cmderSess)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	sess, err := MakeSessionNoTerminal(client, cmderSess.sessOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make sessions: %s", err)
 	}
@@ -111,23 +148,27 @@ func NewCommanderSession(
 	}
 	go copyAndDone(output, outPipe)
 	go copyAndDone(output, errPipe)
-	err = sess.Shell()
-	if err != nil {
-		return nil, err
+	if cmderSess.subSystem != "" {
+		err = sess.RequestSubsystem(cmderSess.subSystem)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		err = sess.Shell()
+		if err != nil {
+			return nil, err
+		}
 	}
-	if promptMatcher == nil {
-		promptMatcher = DefaultPromptMatcher
+
+	if cmderSess.promptMatcher == nil {
+		cmderSess.promptMatcher = DefaultPromptMatcher
 	}
-	if errorMatcher == nil {
-		errorMatcher = DefaultErrorMatcher
+	if cmderSess.errorMatcher == nil {
+		cmderSess.errorMatcher = DefaultErrorMatcher
 	}
-	cmderSess := &CommanderSession{
-		session:       sess,
-		promptMatcher: promptMatcher,
-		errorMatcher:  errorMatcher,
-		output:        output,
-		stdin:         inPipe,
-	}
+	cmderSess.session = sess
+	cmderSess.output = output
+	cmderSess.stdin = inPipe
 	_, err = cmderSess.waitUntil()
 	if err != nil {
 		return nil, err

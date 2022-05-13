@@ -36,7 +36,7 @@ func NewInteractiveSSH(sshBox *SSHBox) *InteractiveSSH {
 	return &InteractiveSSH{sshBox: sshBox}
 }
 
-func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
+func (c *InteractiveSSH) startInteractive(commands []string, subSystem string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
 	var err error
 	c.session, err = c.sshBox.SSHClient().NewSession()
 	if err != nil {
@@ -96,18 +96,16 @@ func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest T
 			}()
 		}
 	}
-
-	if len(commands) > 0 {
+	if subSystem != "" {
+		err = c.session.RequestSubsystem(subSystem)
+	} else if len(commands) > 0 {
 		cmd := strings.Join(commands, " ")
 		err = c.session.Start(cmd)
-		if err != nil {
-			return err
-		}
 	} else {
 		err = c.session.Shell()
-		if err != nil {
-			return err
-		}
+	}
+	if err != nil {
+		return err
 	}
 
 	wg := &sync.WaitGroup{}
@@ -156,8 +154,20 @@ func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest T
 	return result
 }
 
+func (c *InteractiveSSH) InteractiveSessionSubSystem(subsystem string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
+	return c.startInteractive(nil, subsystem, terminalRequest, sessOpts...)
+}
+
+func (c *InteractiveSSH) InteractiveSession(commands []string, terminalRequest TTYRequest, sessOpts ...SSHSessionOptions) error {
+	return c.startInteractive(commands, "", terminalRequest, sessOpts...)
+}
+
 func (c *InteractiveSSH) Interactive(sessOpts ...SSHSessionOptions) error {
 	return c.InteractiveSession([]string{}, RequestTTYAuto, sessOpts...)
+}
+
+func (c *InteractiveSSH) InteractiveSubSystem(subsystem string, sessOpts ...SSHSessionOptions) error {
+	return c.InteractiveSessionSubSystem(subsystem, RequestTTYAuto, sessOpts...)
 }
 
 func (c *InteractiveSSH) RunCmd(cmd []string, sessOpts ...SSHSessionOptions) error {
