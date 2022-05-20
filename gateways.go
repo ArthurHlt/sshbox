@@ -2,9 +2,10 @@ package sshbox
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"strconv"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/phayes/freeport"
 )
@@ -19,15 +20,16 @@ type GatewayInfo struct {
 type Gateways struct {
 	gateways []*SSHConf
 	logger   *log.Logger
+	gwBoxes  []*SSHBox
 }
 
 func NewGateways(gateways []*SSHConf) *Gateways {
-	return &Gateways{gateways: gateways}
+	return &Gateways{gateways: gateways, gwBoxes: make([]*SSHBox, 0)}
 }
 
-func (g Gateways) RunGateways(sshUri string) (string, error) {
+func (g Gateways) RunGateways(toHost string) (string, error) {
 	if len(g.gateways) == 0 {
-		return sshUri, nil
+		return toHost, nil
 	}
 	sshUris := make([]GatewayInfo, len(g.gateways))
 	for i, gateway := range g.gateways {
@@ -71,7 +73,7 @@ func (g Gateways) RunGateways(sshUri string) (string, error) {
 		sub := sb.emitter.OnStartTunnels()
 		var target *TunnelTarget
 		if i == len(g.gateways)-1 {
-			remoteHost, remotePortRaw, err := net.SplitHostPort(sshUri)
+			remoteHost, remotePortRaw, err := net.SplitHostPort(toHost)
 			if err != nil {
 				return "", err
 			}
@@ -99,6 +101,13 @@ func (g Gateways) RunGateways(sshUri string) (string, error) {
 			}
 		}()
 		<-sub
+		g.gwBoxes = append(g.gwBoxes, sb)
 	}
 	return fmt.Sprintf("127.0.0.1:%d", sshUris[len(sshUris)-1].LocalPort), nil
+}
+
+func (g Gateways) Close() {
+	for i := len(g.gwBoxes) - 1; i >= 0; i-- {
+		g.gwBoxes[i].Close()
+	}
 }

@@ -141,6 +141,7 @@ func (t *SSHBox) makeSSHClient(keepaliveStopCh chan struct{}) (*ssh.Client, erro
 			t.emitter.EmitStopSocks()
 			t.emitter.EmitStopTunnels()
 			serverConn.Close()
+			t.emitter.EmitClosedSsh()
 			return
 		}
 	}()
@@ -238,8 +239,10 @@ func (t *SSHBox) StopTunnelsServer() {
 	t.emitter.EmitStopTunnels()
 }
 
-func (t *SSHBox) StopSSH() {
+func (t *SSHBox) Close() {
+	sub := t.emitter.OnClosedSsh()
 	t.emitter.EmitStopSsh()
+	<-sub
 }
 
 func (t *SSHBox) HandleTunnelClient(client net.Conn, target *TunnelTarget) {

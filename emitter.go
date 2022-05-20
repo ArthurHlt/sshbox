@@ -16,6 +16,18 @@ func NewEmitter() *Emitter {
 	}
 }
 
+func (em *Emitter) EmitClosedSsh() {
+	em.e.Emit("sshbox_closed_ssh", fmt.Errorf(""))
+}
+
+func (em *Emitter) OnClosedSsh() <-chan emitter.Event {
+	return em.e.On("sshbox_closed_ssh", emitter.Sync)
+}
+
+func (em *Emitter) OffClosedSsh(events ...<-chan emitter.Event) {
+	em.e.Off("sshbox_closed_ssh", events...)
+}
+
 func (em *Emitter) EmitStopSsh() {
 	em.e.Emit("sshbox_stop_ssh", fmt.Errorf(""))
 }
