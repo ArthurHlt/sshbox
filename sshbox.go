@@ -17,7 +17,6 @@ type SSHBoxOptions func(sshBox *SSHBox) error
 type SSHBox struct {
 	config              SSHConf
 	sshClient           *ssh.Client
-	keepaliveStopCh     chan struct{}
 	sshFactory          SshClientFactory
 	socksConf           *socks5.Config
 	nameResolverFactory NameResolverFactory
@@ -28,13 +27,12 @@ type SSHBox struct {
 func NewSSHBox(config SSHConf, opts ...SSHBoxOptions) (*SSHBox, error) {
 	t := &SSHBox{
 		config:              config,
-		keepaliveStopCh:     make(chan struct{}),
 		sshFactory:          DefaultSshClientFactory,
 		nameResolverFactory: NameResolverFactorySSH,
 		emitter:             NewEmitter(),
 	}
 	var err error
-	t.sshClient, err = t.makeSSHClient(t.keepaliveStopCh)
+	t.sshClient, err = t.makeSSHClient()
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +123,7 @@ func (t *SSHBox) listenRLocal(wg *sync.WaitGroup, target *TunnelTarget, startLis
 
 }
 
-func (t *SSHBox) makeSSHClient(keepaliveStopCh chan struct{}) (*ssh.Client, error) {
+func (t *SSHBox) makeSSHClient() (*ssh.Client, error) {
 
 	entry := logger.WithField("target", t.config)
 	entry.Debug("Starting ssh client ...")
@@ -133,7 +131,7 @@ func (t *SSHBox) makeSSHClient(keepaliveStopCh chan struct{}) (*ssh.Client, erro
 	if err != nil {
 		return nil, err
 	}
-	go t.keepalive(serverConn, keepaliveStopCh)
+	go t.keepalive(serverConn)
 	go func() {
 		select {
 		case <-t.emitter.OnStopSsh():
@@ -300,8 +298,9 @@ func (t SSHBox) Emitter() *Emitter {
 	return t.emitter
 }
 
-func (t *SSHBox) keepalive(conn ssh.Conn, stopCh chan struct{}) {
+func (t *SSHBox) keepalive(conn ssh.Conn) {
 	ticker := time.NewTicker(2 * time.Second)
+	subStop := t.emitter.OnStopSsh()
 	for {
 		select {
 		case <-ticker.C:
@@ -312,7 +311,7 @@ func (t *SSHBox) keepalive(conn ssh.Conn, stopCh chan struct{}) {
 				t.emitter.EmitStopTunnels()
 				return
 			}
-		case <-stopCh:
+		case <-subStop:
 			ticker.Stop()
 			return
 		}
