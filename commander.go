@@ -65,16 +65,21 @@ func DefaultErrorMatcher(content []byte) bool {
 	return errorOutputRE.Match(content)
 }
 
+func DefaultSanitizePromptLine(line []byte) []byte {
+	return make([]byte, 0)
+}
+
 // CommanderSession let you run multiple commands on a remote host and getting the output back on a single session
 // which means that context is persisted between commands but output is buffered and split by a promptMatcher which is often the prompt
 type CommanderSession struct {
-	session       *ssh.Session
-	promptMatcher func(line []byte) bool
-	errorMatcher  func(content []byte) bool
-	output        *singleWriter
-	stdin         io.Writer
-	sessOpts      []SSHSessionOptions
-	subSystem     string
+	session            *ssh.Session
+	promptMatcher      func(line []byte) bool
+	sanitizePromptLine func(line []byte) []byte
+	errorMatcher       func(content []byte) bool
+	output             *singleWriter
+	stdin              io.Writer
+	sessOpts           []SSHSessionOptions
+	subSystem          string
 }
 
 type commanderSessionOptions func(*CommanderSession) error
@@ -107,6 +112,13 @@ func WithSessionOptions(opts ...SSHSessionOptions) commanderSessionOptions {
 func WithSubSystem(subsystem string) commanderSessionOptions {
 	return func(c *CommanderSession) error {
 		c.subSystem = subsystem
+		return nil
+	}
+}
+
+func WithSanitizePromptLine(sanitizePromptLine func(line []byte) []byte) commanderSessionOptions {
+	return func(c *CommanderSession) error {
+		c.sanitizePromptLine = sanitizePromptLine
 		return nil
 	}
 }
@@ -166,6 +178,9 @@ func NewCommanderSession(client *ssh.Client, opts ...commanderSessionOptions) (*
 	if cmderSess.errorMatcher == nil {
 		cmderSess.errorMatcher = DefaultErrorMatcher
 	}
+	if cmderSess.sanitizePromptLine == nil {
+		cmderSess.sanitizePromptLine = DefaultSanitizePromptLine
+	}
 	cmderSess.session = sess
 	cmderSess.output = output
 	cmderSess.stdin = inPipe
@@ -204,6 +219,10 @@ func (c *CommanderSession) waitUntil() ([]byte, error) {
 			continue
 		}
 		lines := splitLines[:len(splitLines)-1]
+		lastLineSan := c.sanitizePromptLine(lastLine)
+		if len(lastLineSan) > 0 {
+			lines = append(lines, lastLineSan)
+		}
 		return c.sanitize(bytes.Join(lines, []byte{'\n'})), nil
 	}
 	return c.output.b.Bytes(), nil
