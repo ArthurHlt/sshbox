@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
@@ -224,9 +225,15 @@ func (c *CommanderSession) Run(cmd string) ([]byte, error) {
 
 func (c *CommanderSession) waitUntil() ([]byte, error) {
 	for {
-		splitLines := bytes.Split(c.output.b.Bytes(), c.separator)
+		outputBytes := c.output.b.Bytes()
+		if len(outputBytes) < len(c.separator) {
+			time.Sleep(time.Millisecond * 10)
+			continue
+		}
+		splitLines := bytes.Split(outputBytes, c.separator)
 		lastLine := splitLines[len(splitLines)-1]
 		if !c.promptMatcher(lastLine) {
+			time.Sleep(time.Millisecond * 10)
 			continue
 		}
 		lines := splitLines[:len(splitLines)-1]
