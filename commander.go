@@ -76,6 +76,7 @@ type CommanderSession struct {
 	promptMatcher      func(line []byte) bool
 	sanitizePromptLine func(line []byte) []byte
 	errorMatcher       func(content []byte) bool
+	separator          []byte
 	output             *singleWriter
 	stdin              io.Writer
 	sessOpts           []SSHSessionOptions
@@ -116,6 +117,14 @@ func WithSubSystem(subsystem string) commanderSessionOptions {
 	}
 }
 
+// WithSeparator option to set a separator content
+func WithSeparator(separator []byte) commanderSessionOptions {
+	return func(c *CommanderSession) error {
+		c.separator = separator
+		return nil
+	}
+}
+
 func WithSanitizePromptLine(sanitizePromptLine func(line []byte) []byte) commanderSessionOptions {
 	return func(c *CommanderSession) error {
 		c.sanitizePromptLine = sanitizePromptLine
@@ -132,7 +141,9 @@ func NewCommanderSession(client *ssh.Client, opts ...commanderSessionOptions) (*
 			return nil, err
 		}
 	}
-
+	if len(cmderSess.separator) == 0 {
+		cmderSess.separator = []byte("\n")
+	}
 	sess, err := MakeSessionNoTerminal(client, cmderSess.sessOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make sessions: %s", err)
@@ -213,7 +224,7 @@ func (c *CommanderSession) Run(cmd string) ([]byte, error) {
 
 func (c *CommanderSession) waitUntil() ([]byte, error) {
 	for {
-		splitLines := bytes.Split(c.output.b.Bytes(), []byte{'\n'})
+		splitLines := bytes.Split(c.output.b.Bytes(), c.separator)
 		lastLine := splitLines[len(splitLines)-1]
 		if !c.promptMatcher(lastLine) {
 			continue
@@ -223,7 +234,7 @@ func (c *CommanderSession) waitUntil() ([]byte, error) {
 		if len(lastLineSan) > 0 {
 			lines = append(lines, lastLineSan)
 		}
-		return c.sanitize(bytes.Join(lines, []byte{'\n'})), nil
+		return c.sanitize(bytes.Join(lines, c.separator)), nil
 	}
 	return c.output.b.Bytes(), nil
 }
