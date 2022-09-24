@@ -5,8 +5,6 @@ import (
 	"net"
 	"strconv"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/phayes/freeport"
 )
 
@@ -19,7 +17,6 @@ type GatewayInfo struct {
 
 type Gateways struct {
 	gateways []*SSHConf
-	logger   *log.Logger
 	gwBoxes  []*SSHBox
 }
 
@@ -27,7 +24,7 @@ func NewGateways(gateways []*SSHConf) *Gateways {
 	return &Gateways{gateways: gateways, gwBoxes: make([]*SSHBox, 0)}
 }
 
-func (g Gateways) RunGateways(toHost string) (string, error) {
+func (g *Gateways) RunGateways(toHost string) (string, error) {
 	if len(g.gateways) == 0 {
 		return toHost, nil
 	}
@@ -106,7 +103,7 @@ func (g Gateways) RunGateways(toHost string) (string, error) {
 	return fmt.Sprintf("127.0.0.1:%d", sshUris[len(sshUris)-1].LocalPort), nil
 }
 
-func (g Gateways) Close() {
+func (g *Gateways) Close() {
 	for i := len(g.gwBoxes) - 1; i >= 0; i-- {
 		g.gwBoxes[i].Close()
 	}

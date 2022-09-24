@@ -243,7 +243,7 @@ func (c *CommanderSession) waitUntil() ([]byte, error) {
 		}
 		return c.sanitize(bytes.Join(lines, c.separator)), nil
 	}
-	return c.output.b.Bytes(), nil
+	return c.output.b.Bytes(), nil //nolint
 }
 
 func (c *CommanderSession) sanitize(line []byte) []byte {

@@ -7,8 +7,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/ArthurHlt/sshbox/freeports"
 	netctx "golang.org/x/net/context"
+
+	"github.com/ArthurHlt/sshbox/freeports"
 )
 
 type NameResolverFactory func(sshBox *SSHBox) (NameResolver, error)
@@ -60,10 +61,6 @@ func (n nameResolverSimple) Resolve(ctx context.Context, name string) (context.C
 		}
 	}
 	return ctx, net.IP{}, nil
-}
-
-type sshDnsResolver struct {
-	dnsConfig *DnsConfig
 }
 
 func DnsConfFromSSH(sshBox *SSHBox) (*DnsConfig, error) {

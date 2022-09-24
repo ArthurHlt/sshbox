@@ -57,6 +57,7 @@ func (c *InteractiveSSH) startInteractive(commands []string, subSystem string, t
 	if err != nil {
 		return err
 	}
+	defer inPipe.Close()
 
 	outPipe, err := c.session.StdoutPipe()
 	if err != nil {

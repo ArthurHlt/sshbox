@@ -1,6 +1,6 @@
 module github.com/ArthurHlt/sshbox
 
-go 1.18
+go 1.19
 
 require (
 	github.com/ArthurHlt/go-socks5 v1.0.0

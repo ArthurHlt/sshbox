@@ -17,10 +17,6 @@ func errLoadErrorf(format string, a ...interface{}) *ErrLoad {
 	return &ErrLoad{content: fmt.Sprintf(format, a...)}
 }
 
-func errLoadWrap(err error) *ErrLoad {
-	return &ErrLoad{content: err.Error()}
-}
-
 type TerminalError struct {
 	content []byte
 }

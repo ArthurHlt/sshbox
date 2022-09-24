@@ -7,8 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -131,7 +131,7 @@ func NewPublicKeys(pemBytes []byte, passphrase string) (*PublicKeys, error) {
 }
 
 func NewPublicKeysFromFile(pemFile, passphrase string) (*PublicKeys, error) {
-	bytes, err := ioutil.ReadFile(pemFile)
+	bytes, err := os.ReadFile(pemFile)
 	if err != nil {
 		return nil, err
 	}

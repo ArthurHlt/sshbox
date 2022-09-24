@@ -65,18 +65,15 @@ func (t *SSHBox) listenLocal(wg *sync.WaitGroup, target *TunnelTarget, startList
 
 	defer listener.Close()
 	go func() {
-		select {
-		case <-t.emitter.OnStopTunnels():
-			logger.Debug("Stopping tunnels cause of emitted stop tunnels message")
-			listener.Close()
-			return
-		}
+		<-t.emitter.OnStopTunnels()
+		logger.Debug("Stopping tunnels cause of emitted stop tunnels message")
+		listener.Close()
 	}()
 	startListen <- true
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -85,7 +82,7 @@ func (t *SSHBox) listenLocal(wg *sync.WaitGroup, target *TunnelTarget, startList
 
 		go t.HandleTunnelClient(conn, target)
 	}
-	return nil
+	return nil // nolint
 }
 
 func (t *SSHBox) listenRLocal(wg *sync.WaitGroup, target *TunnelTarget, startListen chan bool) error {
@@ -99,18 +96,15 @@ func (t *SSHBox) listenRLocal(wg *sync.WaitGroup, target *TunnelTarget, startLis
 	}
 	defer listener.Close()
 	go func() {
-		select {
-		case <-t.emitter.OnStopTunnels():
-			logger.Debug("Stopping reverse tunnels cause of emitted stop tunnels message")
-			listener.Close()
-			return
-		}
+		<-t.emitter.OnStopTunnels()
+		logger.Debug("Stopping reverse tunnels cause of emitted stop tunnels message")
+		listener.Close()
 	}()
 	startListen <- true
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
@@ -133,15 +127,12 @@ func (t *SSHBox) makeSSHClient() (*ssh.Client, error) {
 	}
 	go t.keepalive(serverConn)
 	go func() {
-		select {
-		case <-t.emitter.OnStopSsh():
-			logger.Debug("Stopping ssh client cause of emitted stop ssh message")
-			t.emitter.EmitStopSocks()
-			t.emitter.EmitStopTunnels()
-			serverConn.Close()
-			t.emitter.EmitClosedSsh()
-			return
-		}
+		<-t.emitter.OnStopSsh()
+		logger.Debug("Stopping ssh client cause of emitted stop ssh message")
+		t.emitter.EmitStopSocks()
+		t.emitter.EmitStopTunnels()
+		serverConn.Close()
+		t.emitter.EmitClosedSsh()
 	}()
 	return serverConn, nil
 }
@@ -219,12 +210,9 @@ func (t *SSHBox) StartSocksServer(port int, network string) error {
 		return err
 	}
 	go func() {
-		select {
-		case <-t.emitter.OnStopSocks():
-			entry.Debug("Stopping socks cause of emitted stop socks message")
-			listener.Close()
-			return
-		}
+		<-t.emitter.OnStopSocks()
+		entry.Debug("Stopping socks cause of emitted stop socks message")
+		listener.Close()
 	}()
 	return server.Serve(listener)
 }
@@ -277,7 +265,7 @@ func copyData(client, server net.Conn) {
 	go func() {
 		_, err := io.Copy(client, server)
 		if err != nil {
-			logger.Debugf("error while copy remote->local: ", err)
+			logger.Debugf("error while copy remote->local: %s", err.Error())
 		}
 		wg.Done()
 	}()
@@ -286,7 +274,7 @@ func copyData(client, server net.Conn) {
 	go func() {
 		_, err := io.Copy(server, client)
 		if err != nil {
-			logger.Debugf("error while copy local->remote: ", err)
+			logger.Debugf("error while copy local->remote: %s", err.Error())
 		}
 		wg.Done()
 	}()
