@@ -12,7 +12,7 @@ type Emitter struct {
 
 func NewEmitter() *Emitter {
 	return &Emitter{
-		e: emitter.New(uint(100)),
+		e: emitter.New(uint(10)),
 	}
 }
 
